@@ -17,7 +17,6 @@ import java.util.*;
  */
 public class MongoMapReduce {
     public static void main(String[] args) {
-        //SparkConf conf = new SparkConf().setAppName("MongoMapReduce").setMaster("spark://localhost:7077");
         SparkConf conf = new SparkConf().setMaster("local[2]").setAppName("TwitterSpark");
         JavaSparkContext context = new JavaSparkContext(conf);
         MongoClient client = new MongoClient();
@@ -25,6 +24,11 @@ public class MongoMapReduce {
         MongoCollection<Document> zips = database.getCollection("zips");
         MongoCursor<Document> cursor = zips.find().iterator();
         List<Document> documents = new ArrayList<>();
+
+        if (!cursor.hasNext()) {
+            System.out.println("This application assumes that MongoDB has already been seeded with zips.json");
+            System.exit(1);
+        }
 
         while (cursor.hasNext()) {
             documents.add(cursor.next());
@@ -41,14 +45,14 @@ public class MongoMapReduce {
         JavaPairRDD<String, Double> statePopulations = pairs.reduceByKey((a, b) -> a + b);
         Map<String, Double> sortedByPopulation = sortByValue(statePopulations.collectAsMap());
 
-        //statePopulations.foreach((pair) -> System.out.println(String.format("%s: %1.0f", pair._1(), pair._2())));
-        sortedByPopulation.forEach((k, v) -> System.out.println(String.format("%s: %s", k, NumberFormat.getInstance(Locale.US).format(v))));
+        sortedByPopulation.forEach((k, v) -> System.out.printf("%s: %s%n", k, NumberFormat.getInstance(Locale.US).format(v)));
     }
 
     private static <K, V extends Comparable<? super V>> Map<K, V> sortByValue(Map<K, V> map ) {
-        List<Map.Entry<K, V>> list = new LinkedList<>(map.entrySet());
-        Collections.sort(list, Comparator.comparing(o -> (o.getValue())));
         Map<K, V> result = new LinkedHashMap<>();
+        List<Map.Entry<K, V>> list = new LinkedList<>(map.entrySet());
+
+        list.sort(Map.Entry.comparingByValue());
 
         for (Map.Entry<K, V> entry : list) {
             result.put(entry.getKey(), entry.getValue());
